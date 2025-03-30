@@ -6,7 +6,10 @@ A modern 3D Rubik's Cube implementation using Next.js, Three.js, and React Three
 
 - Interactive 3D Rubik's Cube with smooth animations
 - Modern Gumroad-style UI design
-- Keyboard and mouse controls
+- Advanced face selection and rotation:
+  - Visual feedback with glowing effects and face separation
+  - Continuous rotation mode for selected faces
+  - Intuitive keyboard and mouse controls
 - Move history tracking
 - Auto-solve functionality
 - Beginner's guide with step-by-step instructions
@@ -40,8 +43,16 @@ npm run dev
 
 ## Controls
 
-- Use keyboard keys (F, B, R, L, U, D) for face rotations
-- Hold Shift for counter-clockwise rotation
+### Face Selection and Rotation
+- Click a face button or use keyboard keys (F, B, R, L, U, D) to select a face
+- When a face is selected:
+  - Use Left/Right arrow keys for counter-clockwise/clockwise rotation
+  - Click rotation buttons for precise control
+  - Press the same face key again to rotate (hold Shift for counter-clockwise)
+  - Press Space to exit selection mode
+
+### Other Controls
 - Press Z to undo moves
 - Press ESC to reset the cube
-- Click the Auto Solve button for automatic solution
+- Click Auto Solve for automatic solution
+- Click Scramble for a random shuffle

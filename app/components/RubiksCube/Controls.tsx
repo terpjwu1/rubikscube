@@ -72,10 +72,13 @@ export default function Controls() {
   }, [rotateFace, undoMove, resetCube, isSolving, selectedFace, selectFace]);
 
   const handleFaceClick = (face: FaceKey) => {
+    if (isSolving) return;
+    
     if (selectedFace === face) {
       // Clicking the same face button again will rotate it clockwise
       rotateFace(face);
     } else {
+      // Select the new face
       selectFace(face);
     }
   };

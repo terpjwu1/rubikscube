@@ -1,20 +1,5 @@
 import { create } from 'zustand';
-
-export type Color = 'white' | 'yellow' | 'red' | 'orange' | 'blue' | 'green' | 'black';
-export type Face = 'F' | 'B' | 'R' | 'L' | 'U' | 'D' | null;
-
-export interface CubePiece {
-  position: [number, number, number];
-  rotation: [number, number, number];
-  colors: {
-    front: Color;
-    back: Color;
-    top: Color;
-    bottom: Color;
-    left: Color;
-    right: Color;
-  };
-}
+import type { Color, Face, CubePiece } from '../types/cube';
 
 export interface CubeState {
   pieces: CubePiece[];
@@ -41,7 +26,7 @@ export interface CubeState {
 }
 
 // Helper function to create initial cube state
-const createInitialCubeState = (): CubePiece[] => {
+export const createInitialCubeState = (): CubePiece[] => {
   const pieces: CubePiece[] = [];
   
   // Generate all 27 pieces (3x3x3)
@@ -68,7 +53,7 @@ const createInitialCubeState = (): CubePiece[] => {
 };
 
 // Helper function to rotate pieces around an axis
-const rotatePiecesAroundAxis = (pieces: CubePiece[], axis: 'x' | 'y' | 'z', layer: number, clockwise: boolean): CubePiece[] => {
+export const rotatePiecesAroundAxis = (pieces: CubePiece[], axis: 'x' | 'y' | 'z', layer: number, clockwise: boolean): CubePiece[] => {
   return pieces.map(piece => {
     const [x, y, z] = piece.position;
     
@@ -123,7 +108,7 @@ const rotatePiecesAroundAxis = (pieces: CubePiece[], axis: 'x' | 'y' | 'z', laye
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Helper functions for the solver
-const findPiece = (pieces: CubePiece[], colors: Partial<Record<keyof CubePiece['colors'], Color>>): CubePiece | undefined => {
+export const findPiece = (pieces: CubePiece[], colors: Partial<Record<keyof CubePiece['colors'], Color>>): CubePiece | undefined => {
   return pieces.find(piece => {
     return Object.entries(colors).every(([face, color]) => 
       piece.colors[face as keyof CubePiece['colors']] === color
@@ -131,7 +116,7 @@ const findPiece = (pieces: CubePiece[], colors: Partial<Record<keyof CubePiece['
   });
 };
 
-const isCrossPieceSolved = (piece: CubePiece, targetY: number): boolean => {
+export const isCrossPieceSolved = (piece: CubePiece, targetY: number): boolean => {
   const [x, y, z] = piece.position;
   if (y !== targetY) return false;
 
@@ -140,6 +125,36 @@ const isCrossPieceSolved = (piece: CubePiece, targetY: number): boolean => {
   if (targetY === -1 && piece.colors.bottom !== 'yellow') return false;
 
   // Check if the other color is aligned correctly
+  if (z === 1 && piece.colors.front !== 'red') return false;
+  if (z === -1 && piece.colors.back !== 'orange') return false;
+  if (x === 1 && piece.colors.right !== 'blue') return false;
+  if (x === -1 && piece.colors.left !== 'green') return false;
+
+  return true;
+};
+
+export const isCornerSolved = (piece: CubePiece, targetY: number): boolean => {
+  const [x, y, z] = piece.position;
+  if (y !== targetY) return false;
+
+  // Check if white/yellow sticker is facing up/down
+  if (targetY === 1 && piece.colors.top !== 'white') return false;
+  if (targetY === -1 && piece.colors.bottom !== 'yellow') return false;
+
+  // Check if other colors are aligned
+  if (z === 1 && piece.colors.front !== 'red') return false;
+  if (z === -1 && piece.colors.back !== 'orange') return false;
+  if (x === 1 && piece.colors.right !== 'blue') return false;
+  if (x === -1 && piece.colors.left !== 'green') return false;
+
+  return true;
+};
+
+export const isMiddleEdgeSolved = (piece: CubePiece): boolean => {
+  const [x, y, z] = piece.position;
+  if (y !== 0) return false; // Must be in middle layer
+
+  // Check if colors match their centers
   if (z === 1 && piece.colors.front !== 'red') return false;
   if (z === -1 && piece.colors.back !== 'orange') return false;
   if (x === 1 && piece.colors.right !== 'blue') return false;
@@ -259,23 +274,6 @@ const solveWhiteCross = async (state: CubeState) => {
   }
 };
 
-const isCornerSolved = (piece: CubePiece, targetY: number): boolean => {
-  const [x, y, z] = piece.position;
-  if (y !== targetY) return false;
-
-  // Check if white/yellow sticker is facing up/down
-  if (targetY === 1 && piece.colors.top !== 'white') return false;
-  if (targetY === -1 && piece.colors.bottom !== 'yellow') return false;
-
-  // Check if other colors are aligned
-  if (z === 1 && piece.colors.front !== 'red') return false;
-  if (z === -1 && piece.colors.back !== 'orange') return false;
-  if (x === 1 && piece.colors.right !== 'blue') return false;
-  if (x === -1 && piece.colors.left !== 'green') return false;
-
-  return true;
-};
-
 const solveWhiteCorners = async (state: CubeState) => {
   const { pieces } = state;
   
@@ -365,19 +363,6 @@ const solveWhiteCorners = async (state: CubeState) => {
       }
     }
   }
-};
-
-const isMiddleEdgeSolved = (piece: CubePiece): boolean => {
-  const [x, y, z] = piece.position;
-  if (y !== 0) return false; // Must be in middle layer
-
-  // Check if colors match their centers
-  if (z === 1 && piece.colors.front !== 'red') return false;
-  if (z === -1 && piece.colors.back !== 'orange') return false;
-  if (x === 1 && piece.colors.right !== 'blue') return false;
-  if (x === -1 && piece.colors.left !== 'green') return false;
-
-  return true;
 };
 
 const solveMiddleLayer = async (state: CubeState) => {

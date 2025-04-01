@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useEffect } from 'react';
-import { Mesh, Euler, MathUtils, Vector3 } from 'three';
+import { Mesh, Euler, MathUtils, Vector3, Matrix4 } from 'three';
 import { useFrame } from '@react-three/fiber';
 import { CubePiece as CubePieceType } from '@/app/store/cubeStore';
 import { useCubeStore } from '@/app/store/cubeStore';
@@ -13,8 +13,8 @@ interface CubePieceProps {
 const PIECE_SIZE = 0.95; // Slightly smaller than 1 to create gaps between pieces
 const ROTATION_SPEED = 0.15; // Speed of rotation animation
 const PULSE_SPEED = 3; // Speed of the pulsing effect
-const MIN_EMISSION = 0.3; // Minimum emission intensity
-const MAX_EMISSION = 2.0; // Maximum emission intensity
+const MIN_EMISSION = 0.2; // Reduced minimum emission intensity
+const MAX_EMISSION = 0.6; // Reduced maximum emission intensity to preserve colors
 const OFFSET_DISTANCE = 0.2; // Distance to offset selected face pieces
 
 const getEmissive = (face: 'F' | 'B' | 'R' | 'L' | 'U' | 'D' | null, position: [number, number, number], time: number): number => {
@@ -37,6 +37,15 @@ const getEmissive = (face: 'F' | 'B' | 'R' | 'L' | 'U' | 'D' | null, position: [
   // Create a smoother pulsing effect using cosine
   const pulse = MIN_EMISSION + (MAX_EMISSION - MIN_EMISSION) * (0.5 + 0.5 * Math.cos(time * PULSE_SPEED));
   return pulse;
+};
+
+const getEmissiveColor = (color: string, isSelected: boolean): string => {
+  if (!isSelected) return color;
+  // Increase saturation for orange when selected
+  if (color === 'orange') {
+    return '#ff6000'; // More saturated orange
+  }
+  return color;
 };
 
 const getOffset = (face: 'F' | 'B' | 'R' | 'L' | 'U' | 'D' | null, position: [number, number, number]): [number, number, number] => {
@@ -71,16 +80,11 @@ const getOffset = (face: 'F' | 'B' | 'R' | 'L' | 'U' | 'D' | null, position: [nu
 
 export default function CubePiece({ piece }: CubePieceProps) {
   const meshRef = useRef<Mesh>(null);
-  const targetRotation = useRef<[number, number, number]>([0, 0, 0]);
-  const currentRotation = useRef<[number, number, number]>([0, 0, 0]);
   const selectedFace = useCubeStore(state => state.selectedFace);
+  const currentRotation3D = useCubeStore(state => state.currentRotation);
   const timeRef = useRef(0);
   const targetOffset = useRef<[number, number, number]>([0, 0, 0]);
   const currentOffset = useRef<[number, number, number]>([0, 0, 0]);
-
-  useEffect(() => {
-    targetRotation.current = piece.rotation;
-  }, [piece.rotation]);
 
   useEffect(() => {
     targetOffset.current = getOffset(selectedFace, piece.position);
@@ -90,25 +94,75 @@ export default function CubePiece({ piece }: CubePieceProps) {
     timeRef.current += delta;
 
     if (meshRef.current) {
-      // Smoothly interpolate current rotation to target rotation
-      currentRotation.current = currentRotation.current.map((curr, i) => {
-        const target = targetRotation.current[i];
-        return MathUtils.lerp(curr, target, ROTATION_SPEED);
-      }) as [number, number, number];
+      // Handle face rotation animation
+      if (currentRotation3D) {
+        const [x, y, z] = piece.position;
+        const isInRotatingFace = (
+          (currentRotation3D.axis === 'x' && x === currentRotation3D.layer) ||
+          (currentRotation3D.axis === 'y' && y === currentRotation3D.layer) ||
+          (currentRotation3D.axis === 'z' && z === currentRotation3D.layer)
+        );
 
-      // Smoothly interpolate current offset to target offset
+        if (isInRotatingFace) {
+          // Create matrices for transformation
+          const rotationMatrix = new Matrix4();
+          const toOriginMatrix = new Matrix4();
+          const fromOriginMatrix = new Matrix4();
+          
+          // Calculate the center of rotation based on the layer
+          let centerPoint = [0, 0, 0];
+          switch (currentRotation3D.axis) {
+            case 'x':
+              centerPoint = [currentRotation3D.layer, 0, 0];
+              break;
+            case 'y':
+              centerPoint = [0, currentRotation3D.layer, 0];
+              break;
+            case 'z':
+              centerPoint = [0, 0, currentRotation3D.layer];
+              break;
+          }
+          
+          // Move to origin, rotate, then move back
+          toOriginMatrix.makeTranslation(-centerPoint[0], -centerPoint[1], -centerPoint[2]);
+          fromOriginMatrix.makeTranslation(centerPoint[0], centerPoint[1], centerPoint[2]);
+          
+          // Set the rotation based on the current angle
+          switch (currentRotation3D.axis) {
+            case 'x':
+              rotationMatrix.makeRotationX(-currentRotation3D.angle);
+              break;
+            case 'y':
+              rotationMatrix.makeRotationY(-currentRotation3D.angle);
+              break;
+            case 'z':
+              rotationMatrix.makeRotationZ(-currentRotation3D.angle);
+              break;
+          }
+
+          // Apply transformations in the correct order:
+          // 1. Move to origin
+          // 2. Rotate
+          // 3. Move back
+          meshRef.current.matrix.identity();
+          meshRef.current.matrix.multiply(fromOriginMatrix);
+          meshRef.current.matrix.multiply(rotationMatrix);
+          meshRef.current.matrix.multiply(toOriginMatrix);
+          meshRef.current.matrix.multiply(new Matrix4().makeTranslation(...piece.position));
+          meshRef.current.matrixAutoUpdate = false;
+        }
+      } else {
+        // Reset matrix when not rotating
+        meshRef.current.matrix.identity();
+        meshRef.current.matrixAutoUpdate = true;
+        meshRef.current.position.set(...piece.position);
+      }
+
+      // Handle face separation animation
       currentOffset.current = currentOffset.current.map((curr, i) => {
         const target = targetOffset.current[i];
         return MathUtils.lerp(curr, target, ROTATION_SPEED);
       }) as [number, number, number];
-
-      meshRef.current.rotation.setFromVector3(
-        new Vector3(
-          currentRotation.current[0],
-          currentRotation.current[1],
-          currentRotation.current[2]
-        )
-      );
 
       const [baseX, baseY, baseZ] = piece.position;
       const [offsetX, offsetY, offsetZ] = currentOffset.current;
@@ -128,12 +182,54 @@ export default function CubePiece({ piece }: CubePieceProps) {
       position={position}
     >
       <boxGeometry args={[PIECE_SIZE, PIECE_SIZE, PIECE_SIZE]} />
-      <meshStandardMaterial color={colors.right} emissive={colors.right} emissiveIntensity={getEmissive(selectedFace, [1, position[1], position[2]], timeRef.current)} attach="material-0" />
-      <meshStandardMaterial color={colors.left} emissive={colors.left} emissiveIntensity={getEmissive(selectedFace, [-1, position[1], position[2]], timeRef.current)} attach="material-1" />
-      <meshStandardMaterial color={colors.top} emissive={colors.top} emissiveIntensity={getEmissive(selectedFace, [position[0], 1, position[2]], timeRef.current)} attach="material-2" />
-      <meshStandardMaterial color={colors.bottom} emissive={colors.bottom} emissiveIntensity={getEmissive(selectedFace, [position[0], -1, position[2]], timeRef.current)} attach="material-3" />
-      <meshStandardMaterial color={colors.front} emissive={colors.front} emissiveIntensity={getEmissive(selectedFace, [position[0], position[1], 1], timeRef.current)} attach="material-4" />
-      <meshStandardMaterial color={colors.back} emissive={colors.back} emissiveIntensity={getEmissive(selectedFace, [position[0], position[1], -1], timeRef.current)} attach="material-5" />
+      <meshStandardMaterial 
+        color={colors.right} 
+        emissive={getEmissiveColor(colors.right, getEmissive(selectedFace, [1, position[1], position[2]], timeRef.current) > 0)}
+        emissiveIntensity={getEmissive(selectedFace, [1, position[1], position[2]], timeRef.current)}
+        metalness={0.1}
+        roughness={0.8}
+        attach="material-0" 
+      />
+      <meshStandardMaterial 
+        color={colors.left} 
+        emissive={getEmissiveColor(colors.left, getEmissive(selectedFace, [-1, position[1], position[2]], timeRef.current) > 0)}
+        emissiveIntensity={getEmissive(selectedFace, [-1, position[1], position[2]], timeRef.current)}
+        metalness={0.1}
+        roughness={0.8}
+        attach="material-1" 
+      />
+      <meshStandardMaterial 
+        color={colors.top} 
+        emissive={getEmissiveColor(colors.top, getEmissive(selectedFace, [position[0], 1, position[2]], timeRef.current) > 0)}
+        emissiveIntensity={getEmissive(selectedFace, [position[0], 1, position[2]], timeRef.current)}
+        metalness={0.1}
+        roughness={0.8}
+        attach="material-2" 
+      />
+      <meshStandardMaterial 
+        color={colors.bottom} 
+        emissive={getEmissiveColor(colors.bottom, getEmissive(selectedFace, [position[0], -1, position[2]], timeRef.current) > 0)}
+        emissiveIntensity={getEmissive(selectedFace, [position[0], -1, position[2]], timeRef.current)}
+        metalness={0.1}
+        roughness={0.8}
+        attach="material-3" 
+      />
+      <meshStandardMaterial 
+        color={colors.front} 
+        emissive={getEmissiveColor(colors.front, getEmissive(selectedFace, [position[0], position[1], 1], timeRef.current) > 0)}
+        emissiveIntensity={getEmissive(selectedFace, [position[0], position[1], 1], timeRef.current)}
+        metalness={0.1}
+        roughness={0.8}
+        attach="material-4" 
+      />
+      <meshStandardMaterial 
+        color={colors.back} 
+        emissive={getEmissiveColor(colors.back, getEmissive(selectedFace, [position[0], position[1], -1], timeRef.current) > 0)}
+        emissiveIntensity={getEmissive(selectedFace, [position[0], position[1], -1], timeRef.current)}
+        metalness={0.1}
+        roughness={0.8}
+        attach="material-5" 
+      />
     </mesh>
   );
 } 

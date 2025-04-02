@@ -100,40 +100,59 @@ describe('Cube Solver', () => {
 
   describe('Move Execution', () => {
     it('should correctly execute U move', () => {
+      // Get the front-right piece before the move
       const frontRightBefore = pieces.find(p => 
         p.position[0] === 1 && p.position[1] === 1 && p.position[2] === 1
       );
       
+      // Execute U move
       pieces = executeMove(pieces, 'U');
       
-      const frontRightAfter = pieces.find(p => 
+      // After a U move, the front-right piece should move to front-left
+      const pieceAfter = pieces.find(p => 
         p.position[0] === -1 && p.position[1] === 1 && p.position[2] === 1
       );
       
-      expect(frontRightAfter?.colors).toEqual(frontRightBefore?.colors);
+      // The top color (white) should stay the same
+      expect(pieceAfter?.colors.top).toBe('white');
       
-      expect(frontRightAfter?.colors.top).toBe('white');
+      // The front color should now be what was the right color
+      expect(pieceAfter?.colors.front).toBe(frontRightBefore?.colors.right);
+      
+      // The right color should now be what was the back color
+      expect(pieceAfter?.colors.right).toBe(frontRightBefore?.colors.back);
+      
+      // The back color should now be what was the left color
+      expect(pieceAfter?.colors.back).toBe(frontRightBefore?.colors.left);
+      
+      // The left color should now be what was the front color
+      expect(pieceAfter?.colors.left).toBe(frontRightBefore?.colors.front);
     });
 
     it('should maintain cube integrity after sequence', () => {
       const sequence = ['R', 'U', 'R\'', 'U\''];
       pieces = executeSequence(pieces, sequence);
       
+      // Check if we still have all pieces
       expect(pieces.length).toBe(27);
       
-      const centers = pieces.filter(p => 
-        (p.position[0] === 0 && p.position[2] === 0) ||
-        (p.position[0] === 0 && p.position[1] === 0) ||
-        (p.position[1] === 0 && p.position[2] === 0)
-      );
+      // Check if we have exactly one center of each color
+      const centers = pieces.filter(p => {
+        const [x, y, z] = p.position;
+        // A center piece has exactly two coordinates that are 0
+        const zeroCount = [x, y, z].filter(coord => coord === 0).length;
+        return zeroCount === 2;
+      });
       expect(centers.length).toBe(6);
       
+      // Check if centers have correct colors
       const centerColors = centers.map(p => {
-        if (p.position[1] === 1) return p.colors.top;
-        if (p.position[1] === -1) return p.colors.bottom;
-        if (p.position[2] === 1) return p.colors.front;
-        if (p.position[2] === -1) return p.colors.back;
-        if (p.position[0] === 1) return p.colors.right;
+        const [x, y, z] = p.position;
+        if (y === 1) return p.colors.top;
+        if (y === -1) return p.colors.bottom;
+        if (z === 1) return p.colors.front;
+        if (z === -1) return p.colors.back;
+        if (x === 1) return p.colors.right;
         return p.colors.left;
       });
       
